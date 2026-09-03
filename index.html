@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>liquid-glass — live knobs</title>
+<style>
+  :root {
+    --tint: 7 20 23;
+    --tint-a: 0.5;
+    --blur: 4px;
+    --sat: 1.25;
+    --radius: 18px;
+    --ink: #EEF5F3;
+    --ink-muted: rgba(238, 245, 243, 0.62);
+    --ui-bg: rgba(7, 20, 23, 0.72);
+    --ui-line: rgba(255, 255, 255, 0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #071417; color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .stage { position: fixed; inset: 0; }
+  .pane {
+    position: absolute; right: 8vw; top: 50%; transform: translateY(-50%);
+    width: min(480px, 80vw); padding: 48px;
+    background: rgb(var(--tint) / var(--tint-a));
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--sat));
+    backdrop-filter: blur(var(--blur)) saturate(var(--sat));
+    border-radius: var(--radius);
+    cursor: grab; user-select: none; touch-action: none;
+  }
+  .pane.dragged { right: auto; transform: none; }
+  .pane.dragging { cursor: grabbing; }
+  .pane.flat { background: linear-gradient(160deg, #071417 0%, #123642 55%, #24647A 100%); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .pane .badge { width: 26px; height: 26px; border-radius: 13px; background: rgba(60, 200, 140, 0.16); display: grid; place-items: center; margin-bottom: 24px; }
+  .pane .badge i { display: block; width: 10px; height: 10px; border-radius: 5px; background: #3CC88C; box-shadow: 0 0 0 0 rgba(60, 200, 140, 0.6); animation: pulse 2.6s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(60, 200, 140, 0.55); } 70% { box-shadow: 0 0 0 9px rgba(60, 200, 140, 0); } 100% { box-shadow: 0 0 0 0 rgba(60, 200, 140, 0); } }
+  @media (prefers-reduced-motion: reduce) { .pane .badge i { animation: none; } }
+  .pane .kicker { margin: 0 0 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-muted); }
+  .pane blockquote { margin: 0; font: italic 27px/1.42 Georgia, "Iowan Old Style", "Times New Roman", serif; }
+  .pane .author { margin: 20px 0 0; font-weight: 600; color: var(--ink-muted); }
+  .pane .hint { position: absolute; right: 14px; bottom: 10px; margin: 0; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(238, 245, 243, 0.35); }
+  .fallback { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 14px; background: rgba(120, 30, 30, 0.75); border: 1px solid rgba(255, 120, 120, 0.4); border-radius: 8px; }
+
+  .knobs {
+    position: fixed; left: 16px; top: 16px; bottom: 16px; width: 330px;
+    overflow: auto; padding: 14px 16px 18px;
+    background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px;
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
+  }
+  .knobs.collapsed { transform: translateX(-110%); opacity: 0; pointer-events: none; }
+  .knobs header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .knobs h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+  .knobs h1 small { font-weight: 400; color: var(--ink-muted); margin-left: 6px; }
+  .knobs #fps { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+  .knobs button, #show {
+    font: inherit; color: var(--ink); background: rgba(255,255,255,0.08); border: 1px solid var(--ui-line);
+    border-radius: 7px; padding: 5px 10px; cursor: pointer;
+  }
+  .knobs button:hover, #show:hover { background: rgba(255,255,255,0.14); }
+  .knobs button.active { background: rgba(60, 124, 143, 0.55); border-color: rgba(120, 200, 220, 0.5); }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .group { margin: 12px 0 0; }
+  .group h2 { margin: 0 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-muted); }
+  .knob { display: grid; grid-template-columns: 112px 1fr 46px; align-items: center; gap: 8px; margin: 3px 0; }
+  .knob label { color: rgba(238, 245, 243, 0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .knob output { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12px; }
+  .knob input[type=range] { width: 100%; accent-color: #3C7C8F; height: 18px; margin: 0; }
+  .swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; }
+  .swatch { display: flex; align-items: center; gap: 6px; }
+  .swatch input[type=color] { width: 26px; height: 22px; padding: 0; border: 1px solid var(--ui-line); border-radius: 5px; background: none; cursor: pointer; }
+  .swatch label { color: rgba(238, 245, 243, 0.85); font-size: 12px; }
+  .actions { display: flex; gap: 6px; margin-top: 14px; }
+  pre { margin: 10px 0 0; padding: 10px; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; color: #C9DDE3; background: rgba(0,0,0,0.35); border: 1px solid var(--ui-line); border-radius: 8px; max-height: 240px; overflow: auto; }
+  .foot { margin-top: 10px; color: var(--ink-muted); font-size: 11px; }
+  .foot a { color: #8FD0E0; }
+  #show { position: fixed; left: 16px; top: 16px; display: none; }
+  #show.on { display: block; }
+  @media (max-width: 760px) {
+    .knobs { width: calc(100vw - 32px); }
+    .pane { right: 50%; transform: translate(50%, -50%); }
+  }
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<main class="stage">
+  <section class="pane" id="pane">
+    <div class="badge"><i></i></div>
+    <p class="kicker">Liquid glass · WebGL · zero deps</p>
+    <blockquote id="quote">“Attention is the rarest and purest form of generosity.”</blockquote>
+    <p class="author">— Simone Weil</p>
+    <p class="hint">drag me</p>
+  </section>
+  <div class="fallback" id="fallback" hidden>WebGL is unavailable here — the pane keeps a flat gradient (that is the component's fallback contract).</div>
+</main>
+
+<button id="show" type="button">knobs</button>
+
+<aside class="knobs" id="knobs" aria-label="Live controls">
+  <header>
+    <h1>liquid-glass <small>live knobs</small></h1>
+    <span id="fps">— fps</span>
+    <button id="hide" type="button" title="Hide the panel">hide</button>
+  </header>
+  <div class="presets" id="presets"></div>
+  <div id="groups"></div>
+  <div class="group">
+    <h2>Palette</h2>
+    <div class="swatches" id="swatches"></div>
+  </div>
+  <div class="actions">
+    <button id="copy" type="button">Copy config</button>
+    <button id="freeze" type="button">Freeze</button>
+    <button id="reset" type="button">Reset</button>
+  </div>
+  <pre id="out" hidden></pre>
+  <p class="foot">Every slider calls <code>glass.set({…})</code> live. Drag the pane — the slab follows the element. <a href="https://github.com/mreza0100/liquid-glass" id="repo">source</a></p>
+</aside>
+
+<script type="module">
+  import { LiquidGlass, DEFAULTS } from './liquid-glass.js';
+
+  const $ = (s) => document.querySelector(s);
+  const canvas = $('#bg');
+  const pane = $('#pane');
+  const root = document.documentElement;
+
+  // Pane (CSS) knobs live outside the component — tint, frost and radius belong to the DOM element
+  // sitting over the canvas; `radius` is the one knob that drives both (the slab must match the box).
+  const PANE_KEYS = ['tint', 'tintAlpha', 'blur', 'saturate'];
+  const PANE_DEFAULTS = { tint: '#071417', tintAlpha: 0.5, blur: 4, saturate: 1.25 };
+
+  const PRESETS = {
+    Petrol: { radius: 18 },
+    Midnight: {
+      palette: { band: '#05060F', deep: '#141A3A', mid: '#2A2F6B', rise: '#6C5CE7', veil: '#C9CCFF', smoke: '#F2F0FF' },
+      tint: '#0B0E2A', tintAlpha: 0.45, blur: 6, saturate: 1.3, radius: 24, lensStrength: 0.3, dispersion: 0.6,
+    },
+    Ember: {
+      palette: { band: '#120806', deep: '#3A1A10', mid: '#7A3A1E', rise: '#E07A3F', veil: '#FFD9B8', smoke: '#FFF4E8' },
+      tint: '#1A0B07', tintAlpha: 0.42, blur: 5, saturate: 1.2, radius: 12, smokeNear: 0.65, light: 0.45, lightAngle: 60,
+    },
+    Moss: {
+      palette: { band: '#070D0A', deep: '#12291E', mid: '#2C5A40', rise: '#6BA37A', veil: '#DCEFE0', smoke: '#F3FAF4' },
+      tint: '#0A1A12', tintAlpha: 0.5, blur: 3, saturate: 1.15, radius: 32, smokeSpeed: 0.03, smokeScale: 0.7, thickness: 0.35,
+    },
+    Ice: {
+      palette: { band: '#0E1B24', deep: '#1E3A4C', mid: '#4C86A0', rise: '#9ED4E6', veil: '#EAF6FB', smoke: '#FFFFFF' },
+      tint: '#123040', tintAlpha: 0.35, blur: 8, saturate: 1.4, radius: 40, lensStrength: 0.12, bevel: 0.12, dispersion: 0.9, hairline: 0.4, edgeDark: 0.06,
+    },
+  };
+
+  const GROUPS = [
+    ['Glass', [
+      ['lensStrength', 'Refraction', 0, 0.8, 0.01],
+      ['bevel', 'Bevel width', 0, 0.25, 0.005],
+      ['dispersion', 'Dispersion', 0, 1.5, 0.01],
+      ['thickness', 'Thickness', 0, 0.8, 0.01],
+      ['light', 'Light', 0, 1, 0.01],
+      ['shade', 'Shade', 0, 0.6, 0.01],
+      ['hairline', 'Hairline', 0, 0.8, 0.01],
+      ['sheen', 'Sheen', 0, 0.3, 0.005],
+      ['edgeDark', 'Edge darkening', 0, 0.5, 0.01],
+      ['lightAngle', 'Light angle °', 0, 360, 1],
+      ['radius', 'Corner radius', 0, 80, 1],
+    ]],
+    ['Smoke', [
+      ['smokeSpeed', 'Speed', 0, 0.4, 0.005],
+      ['smokeScale', 'Scale', 0.3, 3, 0.05],
+      ['smokeFar', 'Far layer', 0, 1, 0.01],
+      ['smokeNear', 'Near layer', 0, 1, 0.01],
+      ['veilAmount', 'Veil', 0, 1, 0.01],
+      ['glow', 'Glow', 0, 1, 0.01],
+    ]],
+    ['Pane (CSS over the canvas)', [
+      ['tintAlpha', 'Tint opacity', 0, 1, 0.01],
+      ['blur', 'Frost blur px', 0, 30, 0.5],
+      ['saturate', 'Saturate', 0.5, 2, 0.05],
+    ]],
+    ['Runtime', [
+      ['maxFps', 'Max fps', 1, 60, 1],
+      ['fieldDownscale', 'Field downscale', 1, 8, 1],
+    ]],
+  ];
+  const SWATCHES = [
+    ['band', 'Band'], ['deep', 'Deep'], ['mid', 'Mid'], ['rise', 'Glow'], ['veil', 'Veil'], ['smoke', 'Smoke'], ['tint', 'Pane tint'],
+  ];
+
+  // ── state ──────────────────────────────────────────────────────────────────
+  let state = fresh(PRESETS.Petrol);
+
+  function fresh(preset) {
+    const s = { ...DEFAULTS, ...PANE_DEFAULTS, ...preset, palette: { ...DEFAULTS.palette, ...(preset.palette || {}) } };
+    delete s.lens; delete s.onUnavailable;
+    return s;
+  }
+
+  const glass = new LiquidGlass(canvas, {
+    ...libOptions(state),
+    lens: pane,
+    onUnavailable: () => {
+      pane.classList.add('flat');
+      $('#fallback').hidden = false;
+    },
+  });
+
+  function libOptions(s) {
+    const o = {};
+    for (const k of Object.keys(DEFAULTS)) if (k !== 'lens' && k !== 'onUnavailable') o[k] = s[k];
+    return o;
+  }
+
+  function hexToTriplet(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+  }
+
+  function applyPane(s) {
+    root.style.setProperty('--tint', hexToTriplet(s.tint));
+    root.style.setProperty('--tint-a', String(s.tintAlpha));
+    root.style.setProperty('--blur', `${s.blur}px`);
+    root.style.setProperty('--sat', String(s.saturate));
+    root.style.setProperty('--radius', `${s.radius}px`);
+  }
+
+  function applyAll() {
+    glass.set(libOptions(state));
+    applyPane(state);
+    syncInputs();
+    renderOut();
+  }
+
+  function update(key, value) {
+    state[key] = value;
+    if (PANE_KEYS.includes(key)) applyPane(state);
+    else if (key === 'radius') { glass.set({ radius: value }); applyPane(state); }
+    else glass.set({ [key]: value });
+    renderOut();
+  }
+
+  function updatePalette(key, value) {
+    if (key === 'tint') { state.tint = value; applyPane(state); }
+    else { state.palette = { ...state.palette, [key]: value }; glass.set({ palette: { [key]: value } }); }
+    renderOut();
+  }
+
+  // ── knobs UI ───────────────────────────────────────────────────────────────
+  const inputs = new Map();
+  const groupsEl = $('#groups');
+  for (const [title, knobs] of GROUPS) {
+    const g = document.createElement('section');
+    g.className = 'group';
+    g.innerHTML = `<h2>${title}</h2>`;
+    for (const [key, label, min, max, step] of knobs) {
+      const row = document.createElement('div');
+      row.className = 'knob';
+      const id = `k-${key}`;
+      row.innerHTML = `<label for="${id}">${label}</label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}"><output for="${id}"></output>`;
+      const input = row.querySelector('input');
+      const out = row.querySelector('output');
+      input.addEventListener('input', () => {
+        const v = Number(input.value);
+        out.value = fmt(v, step);
+        update(key, v);
+        markPreset(null);
+      });
+      inputs.set(key, { input, out, step });
+      g.appendChild(row);
+    }
+    groupsEl.appendChild(g);
+  }
+  const swatchesEl = $('#swatches');
+  for (const [key, label] of SWATCHES) {
+    const w = document.createElement('div');
+    w.className = 'swatch';
+    const id = `c-${key}`;
+    w.innerHTML = `<input id="${id}" type="color"><label for="${id}">${label}</label>`;
+    const input = w.querySelector('input');
+    input.addEventListener('input', () => { updatePalette(key, input.value); markPreset(null); });
+    inputs.set(`palette.${key}`, { input });
+    swatchesEl.appendChild(w);
+  }
+  const fmt = (v, step) => (step >= 1 ? String(Math.round(v)) : v.toFixed(step < 0.01 ? 3 : 2));
+
+  function syncInputs() {
+    for (const [key, { input, out, step }] of inputs) {
+      if (key.startsWith('palette.')) {
+        const k = key.slice(8);
+        input.value = k === 'tint' ? state.tint : state.palette[k];
+      } else {
+        input.value = String(state[key]);
+        if (out) out.value = fmt(state[key], step);
+      }
+    }
+  }
+
+  // presets
+  const presetsEl = $('#presets');
+  for (const name of Object.keys(PRESETS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = name;
+    b.dataset.preset = name;
+    b.addEventListener('click', () => { state = fresh(PRESETS[name]); applyAll(); markPreset(name); });
+    presetsEl.appendChild(b);
+  }
+  function markPreset(name) {
+    for (const b of presetsEl.children) b.classList.toggle('active', b.dataset.preset === name);
+  }
+
+  // ── config output ──────────────────────────────────────────────────────────
+  function diffOptions() {
+    const o = {};
+    for (const k of Object.keys(DEFAULTS)) {
+      if (k === 'lens' || k === 'onUnavailable') continue;
+      if (k === 'palette') {
+        const p = {};
+        for (const c of Object.keys(DEFAULTS.palette)) if (state.palette[c].toLowerCase() !== DEFAULTS.palette[c].toLowerCase()) p[c] = state.palette[c];
+        if (Object.keys(p).length) o.palette = p;
+      } else if (state[k] !== DEFAULTS[k]) o[k] = state[k];
+    }
+    return o;
+  }
+  function snippet() {
+    const o = diffOptions();
+    const opts = Object.keys(o).length ? JSON.stringify(o, null, 2).replace(/"([a-zA-Z]+)":/g, '$1:').replace(/"/g, "'") : '{}';
+    const optsLine = opts === '{}' ? '' : `,\n  ...${opts.replace(/\n/g, '\n  ')}`;
+    return [
+      `import { LiquidGlass } from './liquid-glass.js';`,
+      ``,
+      `const glass = new LiquidGlass(document.querySelector('canvas'), {`,
+      `  lens: document.querySelector('.pane'),`,
+      `  onUnavailable: () => document.querySelector('.pane').classList.add('flat')${optsLine}`,
+      `});`,
+      ``,
+      `/* .pane — the DOM element over the canvas carries tint + frost */`,
+      `.pane {`,
+      `  background: rgb(${hexToTriplet(state.tint)} / ${state.tintAlpha});`,
+      `  backdrop-filter: blur(${state.blur}px) saturate(${state.saturate});`,
+      `  border-radius: ${state.radius}px; /* = options.radius */`,
+      `}`,
+    ].join('\n');
+  }
+  const outEl = $('#out');
+  function renderOut() { if (!outEl.hidden) outEl.textContent = snippet(); }
+  $('#copy').addEventListener('click', async () => {
+    outEl.hidden = false;
+    renderOut();
+    try {
+      await navigator.clipboard.writeText(snippet());
+      $('#copy').textContent = 'Copied ✓';
+    } catch (err) {
+      console.error('clipboard write failed — the config is shown below instead', err);
+      $('#copy').textContent = 'Shown below';
+    }
+    setTimeout(() => { $('#copy').textContent = 'Copy config'; }, 1400);
+  });
+  $('#reset').addEventListener('click', () => { state = fresh(PRESETS.Petrol); applyAll(); markPreset('Petrol'); });
+  let frozen = false;
+  $('#freeze').addEventListener('click', () => {
+    frozen = !frozen;
+    if (frozen) glass.pause(); else glass.resume();
+    $('#freeze').textContent = frozen ? 'Resume' : 'Freeze';
+    $('#freeze').classList.toggle('active', frozen);
+  });
+  $('#hide').addEventListener('click', () => { $('#knobs').classList.add('collapsed'); $('#show').classList.add('on'); });
+  $('#show').addEventListener('click', () => { $('#knobs').classList.remove('collapsed'); $('#show').classList.remove('on'); });
+
+  // fps readout — the component counts its own frames; sample once a second.
+  let lastFrames = 0;
+  setInterval(() => {
+    const f = glass.frames - lastFrames;
+    lastFrames = glass.frames;
+    $('#fps').textContent = glass.available ? `${f} fps` : 'no WebGL';
+  }, 1000);
+
+  // ── drag the pane — the slab follows the element, nothing else to wire ─────
+  let drag = null;
+  pane.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const r = pane.getBoundingClientRect();
+    pane.classList.add('dragged', 'dragging');
+    pane.style.left = `${r.left}px`;
+    pane.style.top = `${r.top}px`;
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    pane.setPointerCapture(e.pointerId);
+  });
+  pane.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    pane.style.left = `${e.clientX - drag.dx}px`;
+    pane.style.top = `${e.clientY - drag.dy}px`;
+  });
+  const endDrag = () => { drag = null; pane.classList.remove('dragging'); };
+  pane.addEventListener('pointerup', endDrag);
+  pane.addEventListener('pointercancel', endDrag);
+
+  // ── boot ───────────────────────────────────────────────────────────────────
+  applyPane(state);
+  syncInputs();
+  markPreset('Petrol');
+  window.liquidGlass = glass; // poke it from the console: liquidGlass.set({ lensStrength: 0.5 })
+</script>
+</body>
+</html>

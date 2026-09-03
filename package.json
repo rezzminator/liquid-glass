@@ -1,0 +1,44 @@
+{
+  "name": "liquid-glass",
+  "version": "0.1.0",
+  "description": "Liquid glass effect for the web — zero-dependency WebGL backdrop: slow white smoke refracted through a thick bevelled glass slab that tracks any element. Glassmorphism in a shader, every parameter a live knob.",
+  "type": "module",
+  "main": "liquid-glass.js",
+  "exports": "./liquid-glass.js",
+  "files": [
+    "liquid-glass.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "demo": "python3 -m http.server 8791"
+  },
+  "keywords": [
+    "liquid-glass",
+    "glassmorphism",
+    "webgl",
+    "glsl",
+    "shader",
+    "background",
+    "backdrop",
+    "refraction",
+    "chromatic-dispersion",
+    "frosted-glass",
+    "smoke",
+    "animated-background",
+    "ui-effect",
+    "vanilla-js",
+    "react",
+    "zero-dependencies"
+  ],
+  "license": "MIT",
+  "homepage": "https://mreza0100.github.io/liquid-glass/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mreza0100/liquid-glass.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mreza0100/liquid-glass/issues"
+  },
+  "author": "Reza"
+}
