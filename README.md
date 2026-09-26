@@ -9,7 +9,7 @@ Works with plain HTML, React, Vue, Svelte, Next.js, Astro — it is one ES modul
 
 ![liquid-glass demo — the glass pane over drifting smoke, with the live control panel](screenshot.png)
 
-**▶ [Live demo with knobs](https://mreza0100.github.io/liquid-glass/)** — turn the sliders, drag the pane,
+**▶ [Live demo with knobs](https://rezzminator.github.io/liquid-glass/)** — turn the sliders, drag the pane,
 hit *Copy config*, paste the result into your project. (Locally: `npm run demo` → http://localhost:8791/.)
 
 ## Why

@@ -32,13 +32,13 @@
     "zero-dependencies"
   ],
   "license": "MIT",
-  "homepage": "https://mreza0100.github.io/liquid-glass/",
+  "homepage": "https://rezzminator.github.io/liquid-glass/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mreza0100/liquid-glass.git"
+    "url": "git+https://github.com/rezzminator/liquid-glass.git"
   },
   "bugs": {
-    "url": "https://github.com/mreza0100/liquid-glass/issues"
+    "url": "https://github.com/rezzminator/liquid-glass/issues"
   },
   "author": "Reza"
 }
